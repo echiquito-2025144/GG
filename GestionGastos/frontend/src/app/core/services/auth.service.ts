@@ -1,17 +1,15 @@
-import { Injectable, inject } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 
-export interface Usuario {
-  id: number;
-  nombre: string;
-  email: string;
-  rol: 'admin' | 'normal';
-}
-
 export interface AuthResponse {
   token: string;
-  usuario: Usuario;
+  usuario: {
+    id: number;
+    nombre: string;
+    email: string;
+    rol: string;
+  };
 }
 
 @Injectable({
@@ -23,31 +21,39 @@ export class AuthService {
 
   login(email: string, password: string): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.apiUrl}/login`, { email, password }).pipe(
-      tap(res => {
-        localStorage.setItem('token', res.token);
-        localStorage.setItem('usuario', JSON.stringify(res.usuario));
-        localStorage.setItem('rol', res.usuario.rol);
+      tap((res) => {
+        // Guarda el JWT y los datos del usuario en el navegador
+        if (res.token) {
+          localStorage.setItem('token', res.token);
+        }
+        if (res.usuario) {
+          localStorage.setItem('usuario', JSON.stringify(res.usuario));
+        }
+      })
+    );
+  }
+
+  registro(nombre: string, email: string, password: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, { nombre, email, password }).pipe(
+      tap((res) => {
+        // Guarda el JWT y los datos del usuario al registrarse
+        if (res.token) {
+          localStorage.setItem('token', res.token);
+        }
+        if (res.usuario) {
+          localStorage.setItem('usuario', JSON.stringify(res.usuario));
+        }
       })
     );
   }
 
   logout(): void {
-    localStorage.clear();
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
   }
 
-  obtenerToken(): string | null {
-    return localStorage.getItem('token');
-  }
-
-  obtenerRol(): string | null {
-    return localStorage.getItem('rol');
-  }
-
-  estaAutenticado(): boolean {
-    return !!this.obtenerToken();
-  }
-
-  registro(nombre: string, email: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, { nombre, email, password });
+  obtenerUsuario() {
+    const user = localStorage.getItem('usuario');
+    return user ? JSON.parse(user) : null;
   }
 }
