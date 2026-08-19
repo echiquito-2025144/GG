@@ -1,59 +1,93 @@
-import { inject, Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
-
-export interface AuthResponse {
-  token: string;
-  usuario: {
-    id: number;
-    nombre: string;
-    email: string;
-    rol: string;
-  };
-}
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private http = inject(HttpClient);
-  private apiUrl = 'http://localhost:3000/api/auth';
+  private router = inject(Router);
+  private apiUrl = 'http://localhost:3000/api/auth'; // Cambia el puerto si tu backend usa otro
+  private timerExpiracion: any;
 
-  login(email: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.apiUrl}/login`, { email, password }).pipe(
-      tap((res) => {
-        // Guarda el JWT y los datos del usuario en el navegador
-        if (res.token) {
-          localStorage.setItem('token', res.token);
-        }
-        if (res.usuario) {
-          localStorage.setItem('usuario', JSON.stringify(res.usuario));
+  // 1. Método Login
+  login(email: string, passwordPlana: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/login`, { email, password: passwordPlana }).pipe(
+      tap((res: any) => {
+        if (res && res.token) {
+          this.guardarSesion(res.token, res.usuario);
         }
       })
     );
   }
 
-  registro(nombre: string, email: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, { nombre, email, password }).pipe(
-      tap((res) => {
-        // Guarda el JWT y los datos del usuario al registrarse
-        if (res.token) {
-          localStorage.setItem('token', res.token);
-        }
-        if (res.usuario) {
-          localStorage.setItem('usuario', JSON.stringify(res.usuario));
+  // 2. Método Registro
+  registro(nombre: string, email: string, passwordPlana: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/register`, { nombre, email, password: passwordPlana }).pipe(
+      tap((res: any) => {
+        if (res && res.token) {
+          this.guardarSesion(res.token, res.usuario);
         }
       })
     );
   }
 
+  // 3. Guardar sesión y activar temporizador de expiración
+  guardarSesion(token: string, usuario: any): void {
+    localStorage.setItem('token', token);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+    this.iniciarTemporizadorExpiracion(token);
+  }
+
+  // 4. Temporizador automático al vencer el JWT
+  iniciarTemporizadorExpiracion(token: string): void {
+    try {
+      const payloadBase64 = token.split('.')[1];
+      const payload = JSON.parse(atob(payloadBase64));
+      const tiempoRestanteMs = (payload.exp * 1000) - Date.now();
+
+      if (this.timerExpiracion) clearTimeout(this.timerExpiracion);
+
+      if (tiempoRestanteMs > 0) {
+        console.log(`⏰ Sesión programada para expirar en ${Math.round(tiempoRestanteMs / 1000)}s.`);
+        this.timerExpiracion = setTimeout(() => {
+          this.logoutPorExpiracion();
+        }, tiempoRestanteMs);
+      } else {
+        this.logoutPorExpiracion();
+      }
+    } catch (error) {
+      console.error('Error al procesar tiempo del token:', error);
+    }
+  }
+
+  // 5. Obtener usuario guardado
+  obtenerUsuario(): any {
+    const usuarioStr = localStorage.getItem('usuario');
+    return usuarioStr ? JSON.parse(usuarioStr) : null;
+  }
+
+  // 6. Obtener token
+  obtenerToken(): string | null {
+    return localStorage.getItem('token');
+  }
+
+  // 7. Cierre de sesión manual
   logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
+    if (this.timerExpiracion) clearTimeout(this.timerExpiracion);
+    this.router.navigate(['/login']);
   }
 
-  obtenerUsuario() {
-    const user = localStorage.getItem('usuario');
-    return user ? JSON.parse(user) : null;
+  
+  private logoutPorExpiracion(): void {
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
+    if (this.timerExpiracion) clearTimeout(this.timerExpiracion);
+    alert('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+    this.router.navigate(['/login']);
   }
 }

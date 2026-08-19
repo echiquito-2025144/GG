@@ -1,12 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-export interface JwtCustomPayload {
-  id: number;
-  email: string;
-  rol: 'admin' | 'normal';
-}
-
 export const verificarToken = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -16,7 +10,8 @@ export const verificarToken = (req: Request, res: Response, next: NextFunction) 
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as JwtCustomPayload;
+    const secret = process.env.JWT_SECRET || 'secret';
+    const decoded = jwt.verify(token, secret);
     (req as any).usuario = decoded;
     next();
   } catch (error) {
@@ -25,9 +20,9 @@ export const verificarToken = (req: Request, res: Response, next: NextFunction) 
 };
 
 export const esAdmin = (req: Request, res: Response, next: NextFunction) => {
-  const usuario = (req as any).usuario as JwtCustomPayload;
+  const usuario = (req as any).usuario;
 
-  if (usuario.rol !== 'admin') {
+  if (!usuario || usuario.rol !== 'ADMIN') {
     return res.status(403).json({ mensaje: 'Acceso denegado. Se requiere rol de Administrador.' });
   }
 
